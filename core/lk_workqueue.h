@@ -7,15 +7,14 @@ typedef void (*WorkFn)(void* arg, void* res);
 
 typedef struct Input{
 	int fn;
-	void* arg;
+	int offset;
 } Input;
 
 
 
-typedef struct Task {
-	Input input;
-	void *res;
-} Task;
+typedef struct Output {
+	int offset;
+} Output;
 
 
 void initQueue();
@@ -23,4 +22,4 @@ void initQueue();
 
 __device__ bool dequeue(volatile mailbox_elem_t * from_device);
 
-bool enqueue(Task task);
+bool enqueue(Input input);

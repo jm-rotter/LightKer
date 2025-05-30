@@ -4,6 +4,7 @@
 #include "gpu_matmul.h"
 #include <stdlib.h>
 #include "lk_workqueue.h"
+#include <stdio.h>
 
 #define BLOCK_SIZE 32
 /*
@@ -25,21 +26,20 @@ MatMulArgs generateMatDataPointer() {
 }
 
 void scheduleMatMul() {
-	Task task;
 	Input input;
 	input.fn = 0;
+	input.offset = 0;
  
 	MatMulArgs data = generateMatDataPointer();
-	input.arg = (void*) &data;
-	task.input = input;
 	Matrix res = createMatrix(32,32);
-	task.res = (void*) &res;
-	enqueue(task);
+	enqueue(input);
 }
 
 
 __device__ int naive_wrapper(void* arg, void* res) {
+	printf("made it here\n");
 	MatMulArgs* args = (MatMulArgs*) args;
+
 	Matrix* C = (Matrix *) res;
 	int a = matmul_kernel(args->A, args->B, *C);		
 	return a;

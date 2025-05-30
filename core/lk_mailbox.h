@@ -11,6 +11,8 @@ typedef mailbox_elem_t mailbox_t[MAX_NUM_BLOCKS];
 
 extern cudaStream_t backbone_stream;
 
+mailbox_elem_t get_h_to_device(int _sm);
+mailbox_elem_t get_h_from_device(int _sm);
 
  int
 lkMailboxInit(cudaStream_t stream = 0);
