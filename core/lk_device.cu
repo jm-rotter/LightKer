@@ -15,13 +15,14 @@
  *  You should have received a copy of the GNU Lesser General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
+#pragma once
 #include <stdio.h>
 
 /* LK internal headers */
 #include "lk_globals.h"
 #include "lk_utils.h"
 #include "lk_workqueue.h"
+#include "lk_device.h"
 
 /* App-specific data structures */
 //#include "data.h"

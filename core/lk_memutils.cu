@@ -17,6 +17,7 @@
  */
 
 #include "lk_utils.h"
+#include "lk_host.h"
 
 void lkDeviceAlloc(void** pDev, size_t size)
 {

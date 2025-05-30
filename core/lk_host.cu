@@ -1,3 +1,4 @@
+#pragma once
 /*
  *  LightKer - Light and flexible GPU persistent threads library
  *  Copyright (C) 2016  Paolo Burgio
@@ -35,7 +36,8 @@ void *syncMalboxFrom(void * fake)
 #include "lk_globals.h"
 #include "lk_utils.h"
 #include "lk_time.h"
-
+#include "lk_device.h"
+#include "lk_host.h"
 /* APP specific */
 //#include "data.h"
 
@@ -154,7 +156,7 @@ void lkInit(unsigned int blknum_x, unsigned int blkdim_x,
   
   /* Mailboxes */
   
-  if(lkMailboxInit())
+	if(lkMailboxInit())
     die("Mailbox initialization failed\n");
 
   initQueue();

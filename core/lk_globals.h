@@ -1,3 +1,4 @@
+#pragma once
 /*
  *  LightKer - Light and flexible GPU persistent threads library
  *  Copyright (C) 2016  Paolo Burgio

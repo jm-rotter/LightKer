@@ -1,3 +1,4 @@
+#pragma once
 /*
  *  LightKer - Light and flexible GPU persistent threads library
  *  Copyright (C) 2016  Paolo Burgio
@@ -19,29 +20,31 @@
 #ifndef __MAILBOX_H__
 #define __MAILBOX_H__
 #include "lk_globals.h"
+#include "lk_mailbox.h"
+#include "lk_utils.h"
+#include <pthread.h>
 /* Mailbox types */
 
 typedef int mailbox_elem_t;
 typedef mailbox_elem_t mailbox_t[MAX_NUM_BLOCKS];
 
-mailbox_elem_t *d_to_device, *d_from_device, *h_to_device, *h_from_device;
 
 #define lkHToDevice(_sm)        _vcast(h_to_device[_sm])
 #define lkHFromDevice(_sm)      _vcast(h_from_device[_sm])
 #define lkDToDevice(_sm)        _vcast(d_to_device[_sm])
 #define lkDFromDevice(_sm)      _vcast(d_from_device[_sm])
 
-#include "lk_utils.h"
-
 extern cudaStream_t backbone_stream;
 
-#include <pthread.h>
+
+mailbox_elem_t *d_to_device, *d_from_device, *h_to_device, *h_from_device;
+
+
 pthread_t flushThread;
 volatile char flushThread_run = 1, flushThread_go = 0;
 void *
 flushToDeviceAsync(void *fake)
 {
-  log("Not even here\n");
   log("\n");
   while(flushThread_run)
   {
@@ -55,7 +58,7 @@ flushToDeviceAsync(void *fake)
 } // flushToDeviceAsync
 
 ALWAYS_INLINE int
-lkMailboxInit(cudaStream_t stream = 0)
+lkMailboxInit(cudaStream_t stream)
 {
   log("\n");
   verb("sizeof(mailbox_elem_t) %lu sizeof(mailbox_t) %lu\n", sizeof(mailbox_elem_t), sizeof(mailbox_t));

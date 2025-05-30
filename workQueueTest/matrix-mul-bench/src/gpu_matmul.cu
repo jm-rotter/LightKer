@@ -13,9 +13,9 @@
  */
 
 
-MatMulArgs generateDataPointer() {
+MatMulArgs generateMatDataPointer() {
 	Matrix a = createMatrix(32, 32);
-	Martix b = createMatrix(32, 32);
+	Matrix b = createMatrix(32, 32);
 	fill_random(a);
 	fill_random(b);
 	MatMulArgs data;
@@ -28,8 +28,9 @@ void scheduleMatMul() {
 	Task task;
 	Input input;
 	input.fn = 0;
- 	
-	input.arg = (void*) &generateDataPointer();
+ 
+	MatMulArgs data = generateMatDataPointer();
+	input.arg = (void*) &data;
 	task.input = input;
 	Matrix res = createMatrix(32,32);
 	task.res = (void*) &res;
@@ -40,14 +41,16 @@ void scheduleMatMul() {
 __device__ int naive_wrapper(void* arg, void* res) {
 	MatMulArgs* args = (MatMulArgs*) args;
 	Matrix* C = (Matrix *) res;
-	return matmul_kernel(args->A, args->B, *C);		
+	int a = matmul_kernel(args->A, args->B, *C);		
+	return a;
 }
 
 __device__ int shared_wrapper(void* arg, void* res) { 
 	MatMulArgs* args = (MatMulArgs*) arg;
 	Matrix* C = (Matrix*) res;
 
-	return matmul_kernel_shared_mem(args->A, args->B, *C);
+	int a= matmul_kernel_shared_mem(args->A, args->B, *C);
+	return a;
 }
 
 //Naive Implementation - One thread for each value in result_matrix

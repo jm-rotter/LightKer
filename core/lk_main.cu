@@ -31,9 +31,9 @@
 
 
 /* LK internals */
-#include "lk_mailbox.cu"
-#include "lk_device.cu"
-#include "lk_host.cu"
+#include "lk_mailbox.h"
+#include "lk_device.h"
+#include "lk_host.h"
 #include <iostream>
 
 /* To debug */

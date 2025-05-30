@@ -16,10 +16,10 @@
 #
 
 # Should be defined in application Makefile
-EXENAME			?= light_kernel
-APPDIR			?= ${LK_HOME}/apps/example1
+# EXENAME			?= light_kernel
+# APPDIR			?= ${LK_HOME}/apps/example1
 # ENV
-LK_HOME			?= ${HOME}/workspace/__remote/LightKer
+# LK_HOME			?= ${HOME}/workspace/__remote/LightKer
 # Required by CUDA
 CUDA_INCLUDEPATH	 = /opt/cuda/include
 
@@ -38,13 +38,13 @@ INCLUDEDIR = ${LK_HOME}
 
 # _device_ functions should be compiled in a single unit. FIXME
 # APPSRCS = $(APPDIR)/app.cu
-# COREFILES = ${COREDIR}/lk_host.cu ${COREDIR}/lk_device.cu ${COREDIR}/lk_mailbox.cu
-# SRCS=${APPSRCS} ${COREFILES}
+COREFILES = $(COREDIR)/lk_device.cu $(COREDIR)/lk_host.cu $(COREDIR)/lk_mailbox.cu $(COREDIR)/lk_workqueue.cu
+#SRCS=${APPSRCS} ${COREFILES}
 
-SRCS=${COREDIR}/lk_main.cu 
+SRCS=${COREDIR}/lk_main.cu
 
-${EXENAME}: $(COREFILES) $(COREHEAD) $(APPSRCS)
-	$(NVCC) -rdc=true -arch=sm_80 -I${INCLUDEDIR} -I$(APPDIR)/include -I${COREDIR} -o ${EXENAME} $(APPDIR)/src/gpu_matmul.cu $(COREDIR)/lk_workqueue.cu $(SRCS) -L $(NVCC_OPTS)
+${EXENAME}: ${COREFILES} ${APPSRCS} ${SRCS}
+	$(NVCC) -rdc=true -I${INCLUDEDIR} -I${APPDIR}/include -I${COREDIR} -o ${EXENAME} ${SRCS} ${APPSRCS} ${COREFILES} ${NVCC_OPTS}
 
 .PHONY: clean
 clean:

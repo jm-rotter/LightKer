@@ -1,9 +1,9 @@
-#include "gpu_matmul.h"
 #include "utils.h"
-#include "lk_workqueue.h"
 #include "lk_globals.h"
-#include "lk_mailbox.cu"
-
+#include "lk_mailbox.h"
+#include "gpu_matmul.h"
+#include "lk_utils.h"
+#include "lk_workqueue.h"
 
 Task h_queue[WORK_QUEUE_LENGTH];
 int h_queueHead, h_taskCounter = 0;
@@ -12,7 +12,6 @@ __device__ Task *d_queue;
 __device__ int *d_tail, *d_taskCounter;
 
 #define DeviceWriteMyMailboxFrom(_val)  _vcast(from_device[blockIdx.x]) = (_val)
-#define HostWriteMyMailboxTo(_val)  _vcast(h_to_device[0]) = (_val)
 
 void initQueue() {
 	h_queueHead = h_taskCounter = 0;
@@ -80,7 +79,7 @@ bool enqueue(Task task) {
 	
 	cudaMemcpy(d_taskCounter, &h_taskCounter, sizeof(int), cudaMemcpyHostToDevice);
 
-	HostWriteMyMailboxTo(THREAD_WORK);	
+	//HostWriteMyMailboxTo(THREAD_WORK);	
 
 	return true;
 } 
