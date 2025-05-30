@@ -1,0 +1,10 @@
+APPDIR = ${PWD}
+EXENAME = matmul
+APPSRCS = $(APPDIR)/app.cu
+
+PARAMS += -DUSE_APP_MAIN
+# PARAMS += -DL_MAX_LENGTH=20
+# PARAMS += -DWORK_TIME=200000
+PARAMS += ${PAR1} ${PAR2}
+
+include ${LK_HOME}/Makefile.lk

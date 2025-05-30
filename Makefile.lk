@@ -1,0 +1,57 @@
+#
+#  LightKer - Light and flexible GPU persistent threads library
+#  Copyright (C) 2016  Paolo Burgio
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU Lesser General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU Lesser General Public License for more details.
+#
+#  You should have received a copy of the GNU Lesser General Public License
+#  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+# Should be defined in application Makefile
+EXENAME			?= light_kernel
+APPDIR			?= ${LK_HOME}/apps/example1
+# ENV
+LK_HOME			?= ${HOME}/workspace/__remote/LightKer
+# Required by CUDA
+CUDA_INCLUDEPATH	 = /opt/cuda/include
+
+# Add LK-specific params to app (user) params
+# PARAMS  += -DLK_DEBUG
+# PARAMS  += -DLK_VERBOSE
+
+NVCC=nvcc
+NVCC_OPTS = -O1
+# NVCC_OPTS += -Xcompiler -Wall
+NVCC_OPTS += $(PARAMS)
+
+COREDIR = ${LK_HOME}/core
+# INCLUDEDIR = ${LK_HOME}/include
+INCLUDEDIR = ${LK_HOME}
+
+# _device_ functions should be compiled in a single unit. FIXME
+# APPSRCS = $(APPDIR)/app.cu
+# COREFILES = ${COREDIR}/lk_host.cu ${COREDIR}/lk_device.cu ${COREDIR}/lk_mailbox.cu
+# SRCS=${APPSRCS} ${COREFILES}
+
+SRCS=${COREDIR}/lk_main.cu 
+
+${EXENAME}: $(COREFILES) $(COREHEAD) $(APPSRCS)
+	$(NVCC) -rdc=true -arch=sm_80 -I${INCLUDEDIR} -I$(APPDIR)/include -I${COREDIR} -o ${EXENAME} $(APPDIR)/src/gpu_matmul.cu $(COREDIR)/lk_workqueue.cu $(SRCS) -L $(NVCC_OPTS)
+
+.PHONY: clean
+clean:
+	rm -f *.o *~  ${EXENAME} ${COREDIR}*~ ${INCLUDEDIR}*~ ${APPDIR}*~
+	
+all: ${EXENAME}
+
+.PHONY: run
+run:
+	./${EXENAME}
