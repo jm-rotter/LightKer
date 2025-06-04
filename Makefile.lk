@@ -44,7 +44,7 @@ COREFILES = $(COREDIR)/lk_device.cu $(COREDIR)/lk_host.cu $(COREDIR)/lk_mailbox.
 SRCS=${COREDIR}/lk_main.cu
 
 ${EXENAME}: ${COREFILES} ${APPSRCS} ${SRCS}
-	$(NVCC) -w -rdc=true -I${INCLUDEDIR} -I${APPDIR}/include -I${COREDIR} -o ${EXENAME} ${SRCS} ${APPSRCS} ${COREFILES} ${NVCC_OPTS}
+	$(NVCC)  -w -rdc=true -I${INCLUDEDIR} -I${APPDIR}/include -I${COREDIR} -o ${EXENAME} ${SRCS} ${APPSRCS} ${COREFILES} ${NVCC_OPTS}
 
 .PHONY: clean
 clean:

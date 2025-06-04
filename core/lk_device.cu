@@ -46,6 +46,7 @@
 __global__ void lkUniformPollingCuda(volatile mailbox_elem_t * to_device,
 		volatile mailbox_elem_t * from_device)
 {
+	printf("nothere\n");
 	//__shared__ int res_shared;
 	int blkid = blockIdx.x;
 	int tid = threadIdx.x;
@@ -82,15 +83,18 @@ __global__ void lkUniformPollingCuda(volatile mailbox_elem_t * to_device,
 		else if (DeviceReadMyMailboxTo() == THREAD_WORK && DeviceReadMyMailboxFrom() != THREAD_FINISHED)
 		{
 			log("Entered workloop\n");
-			if (tid == 0)
-			{
-				log("About to dequeue\n");
-				dequeue(from_device);
-				//DeviceWriteMyMailboxFrom(THREAD_WORKING);
-				log("Hi, I'm block %d and I received sth to do.\n", blkid);
-				//res_shared = 0;
+			//if (tid == 0)
+			//{
+			log("About to dequeue\n"); 
+			dequeue(from_device);
+
+			if (tid==0){
+				DeviceWriteMyMailboxFrom(THREAD_WORKING);
 			}
-			__syncthreads();
+			log("Hi, I'm block %d and I received sth to do.\n", blkid);
+			//res_shared = 0;
+			//}
+			//__syncthreads();
 
 			/* if res_shared == 0 => threads finished correctly */
 			////int lk_res = lkWorkCuda(&data[blkid], &res[blkid]);

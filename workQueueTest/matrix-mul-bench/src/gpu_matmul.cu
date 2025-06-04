@@ -9,7 +9,7 @@
 #include <iostream>
 
 
-#define BLOCK_SIZE 32
+#define BLOCK_SIZE 16
 /*
  * This file makes use of concepts and examples from the
  * NVIDIA CUDA C Programming Guide
@@ -20,8 +20,8 @@ Matrix mB;
 //Above for debugging
 
 MatMulArgs generateMatDataPointer() {
-	Matrix a = createMatrix(32, 32);
-	Matrix b = createMatrix(32, 32);
+	Matrix a = createMatrix(16, 16);
+	Matrix b = createMatrix(16, 16);
 	fill_random(a);
 	fill_random(b);
 	MatMulArgs data;
@@ -158,7 +158,7 @@ __device__ int naive_wrapper(int offset) {
 	printf("Width: %d; Height: %d; element_1: %f\n", b.width, b.height, b.elements[0]);
 
 	Matrix c = from_raw(&offset);
-	c.width = c.height = c.stride = 32;
+	c.width = c.height = c.stride = 16;
 
 	int ret =  matmul_kernel(a, b, &c);
 
@@ -169,7 +169,7 @@ __device__ int naive_wrapper(int offset) {
 	}
 
 	d_input_queue[0].offset = res_off;
-	d_arg_buffer[res_off] = d_arg_buffer[res_off + 4] = d_arg_buffer[res_off + 8] = 32;
+	d_arg_buffer[res_off] = d_arg_buffer[res_off + 4] = d_arg_buffer[res_off + 8] = 16;
 	printf("%d, %d\n", d_input_queue[0].offset, res_off);
 	printf("%f, \n", d_arg_buffer[res_off + 12]);
 
@@ -203,15 +203,15 @@ void get_result_matmul(){
 
 	printf("Got the input offset: %d\n", input.offset);
 	cudaStreamSynchronize(qStream);
-	uint8_t* res = (uint8_t*) malloc(3*sizeof(int) + 32*32 * sizeof(float));
+	uint8_t* res = (uint8_t*) malloc(3*sizeof(int) + 16*16 * sizeof(float));
 	printf("%d\n", input.offset);
-	err = cudaMemcpyAsync(res, dab + input.offset, 3*sizeof(int) + 32*32 * sizeof(float), cudaMemcpyDeviceToHost, qStream);
+	err = cudaMemcpyAsync(res, dab + input.offset, 3*sizeof(int) + 16*16 * sizeof(float), cudaMemcpyDeviceToHost, qStream);
 
 	printf("%s\n", cudaGetErrorName(err));
 	Matrix mres = unflatten(res);
 	printMatrix(mres);
 	
-	Matrix res_mat = createMatrix(32, 32);
+	Matrix res_mat = createMatrix(16, 16);
 	cpu_matmul(mA, mB, res_mat);
 	std::cout << "Comparison: " << (compare(res_mat, mres) ? "CPU result = GPU Naive result" : "CPU result != GPU Naive Result") << "\n";
 	
@@ -228,10 +228,10 @@ __device__ int shared_wrapper(void* arg, void* res) {
 //Naive Implementation - One thread for each value in result_matrix
 //For simplity width/height are a multiple of the block size
 __device__ int matmul_kernel(const Matrix mat1, const Matrix mat2, Matrix* res_mat) {
-	printf("In matrix mul kernel\n");
     float value = 0;
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
+	printf("My row is %d, my col is %d and my res placement is %d\n", row, col, row * 16 + col);
     for (int i = 0; i < mat1.width; i++) {
         value += mat1.elements[row * mat1.width + i] * mat2.elements[i * mat2.width + col];
 	}
