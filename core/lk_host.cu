@@ -92,8 +92,12 @@ void lkLaunch(void (*kernel) (volatile mailbox_elem_t *, volatile mailbox_elem_t
     lkHToDevice(sm) = THREAD_NOP;
   
   lkMailboxFlush(true);
-  kernel <<< blknum, blkdim, shmem, kernel_stream >>> (d_to_device, d_from_device);
-  
+  dim3 gRidDim(1);
+  dim3 bLockDim(1);
+  kernel <<< gRidDim, bLockDim, shmem, kernel_stream >>> (d_to_device, d_from_device);
+ 
+	
+
   // Wait for LK thread(s) to be ready to work
   for (int sm = 0; sm < blknum.x; sm++)
   {
@@ -101,7 +105,7 @@ void lkLaunch(void (*kernel) (volatile mailbox_elem_t *, volatile mailbox_elem_t
       lkMailboxFlushSM(false, sm);
   }
   
-//   log("Done.\n");
+   log("Done.\n");
 } // lkLaunch
 
 /*

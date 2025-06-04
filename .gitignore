@@ -1,2 +1,6 @@
 *~
 res/
+persistent
+apps/*
+apps/
+example.cu

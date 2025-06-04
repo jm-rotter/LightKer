@@ -1,10 +1,13 @@
 #pragma once
+#include <cstdint>
 #include <cuda_runtime.h>
 #include "utils.h"
 #include "gpu_matmul.h"
 #include <stdlib.h>
 #include "lk_workqueue.h"
 #include <stdio.h>
+#include <iostream>
+
 
 #define BLOCK_SIZE 32
 /*
@@ -12,7 +15,9 @@
  * NVIDIA CUDA C Programming Guide
  * (https://docs.nvidia.com/cuda/cuda-c-programming-guide/#programming-interface).
  */
-
+Matrix mA;
+Matrix mB;
+//Above for debugging
 
 MatMulArgs generateMatDataPointer() {
 	Matrix a = createMatrix(32, 32);
@@ -22,6 +27,8 @@ MatMulArgs generateMatDataPointer() {
 	MatMulArgs data;
 	data.A = a;
 	data.B = b;
+	mA = a;
+	mB = b;
 	return data;
 }
 
@@ -31,18 +38,183 @@ void scheduleMatMul() {
 	input.offset = 0;
  
 	MatMulArgs data = generateMatDataPointer();
-	Matrix res = createMatrix(32,32);
-	enqueue(input);
+	int length;
+	uint8_t* flattened = flatten(data, &length);
+	enqueue(input, flattened, length);
+}
+
+__device__ void hhexdump(void *ptr, int buflen) {
+  unsigned char *buf = (unsigned char*)ptr;
+  int i, j;
+  for (i=0; i<buflen; i+=16) {
+    printf("%06x: ", i);
+    for (j=0; j<16; j++) 
+      if (i+j < buflen)
+        printf("%02x ", buf[i+j]);
+      else
+        printf("   ");
+    printf(" ");
+    for (j=0; j<16; j++) 
+      if (i+j < buflen)
+        printf("%c", '.');
+    printf("\n");
+  }
+}
+void hexdump(void *ptr, int buflen) {
+  unsigned char *buf = (unsigned char*)ptr;
+  int i, j;
+  for (i=0; i<buflen; i+=16) {
+    printf("%06x: ", i);
+    for (j=0; j<16; j++) 
+      if (i+j < buflen)
+        printf("%02x ", buf[i+j]);
+      else
+        printf("   ");
+    printf(" ");
+    for (j=0; j<16; j++) 
+      if (i+j < buflen)
+        printf("%c", isprint(buf[i+j]) ? buf[i+j] : '.');
+    printf("\n");
+  }
 }
 
 
-__device__ int naive_wrapper(void* arg, void* res) {
-	printf("made it here\n");
-	MatMulArgs* args = (MatMulArgs*) args;
+uint8_t* flatten(const MatMulArgs src, int* outSize) {
+	log("started flatten\n");
+	int lengthA = src.A.width * src.A.height;
+	int lengthB = src.B.width * src.B.height;
+//	printMatrix(src.A);
+	uint8_t* buffer = (uint8_t*)malloc(6*sizeof(int) + (lengthA+lengthB) * sizeof(float));
 
-	Matrix* C = (Matrix *) res;
-	int a = matmul_kernel(args->A, args->B, *C);		
-	return a;
+	uint8_t* ptr = buffer;
+
+	memcpy(ptr, &src.A.width, sizeof(int)); ptr += sizeof(int);
+	memcpy(ptr, &src.A.height, sizeof(int)); ptr += sizeof(int);
+	memcpy(ptr, &src.A.stride, sizeof(int)); ptr += sizeof(int);
+	memcpy(ptr, src.A.elements, sizeof(float) * lengthA); ptr += sizeof(float) * lengthA;
+	
+
+
+
+	memcpy(ptr, &src.B.width, sizeof(int)); ptr += sizeof(int);
+	memcpy(ptr, &src.B.height, sizeof(int)); ptr +=sizeof(int);
+	memcpy(ptr, &src.B.stride, sizeof(int)); ptr += sizeof(int);
+	memcpy(ptr, src.B.elements, sizeof(float) * lengthB); ptr += sizeof(float) * lengthB;
+
+	*outSize = (6*sizeof(int) + (lengthA+lengthB) * sizeof(float));
+//	*outSize = (3*sizeof(int) + lengthA*sizeof(float));
+//	hexdump(buffer, lengthA);
+
+	return buffer;
+}
+
+Matrix unflatten(uint8_t* src) {
+	int width = *(int*)src; src+=4;
+	int height = *(int*)src; src +=4;
+	int stride = *(int*)src; src += 4;
+	float* elements = new float[width * height];
+	memcpy(elements, src, width*height*sizeof(float));
+
+	Matrix mat;
+	mat.width = width;
+	mat.height = height;
+	mat.stride  =stride;
+	mat.elements = elements;
+
+	return mat;
+
+}
+
+__device__ Matrix from_raw(int* offset) {
+	printf("from raw hexdump\n");
+//	hhexdump(d_arg_buffer, 8216);	
+	uint8_t* ptr = d_arg_buffer + *offset;
+
+	int width = *(int*) ptr; ptr += 4;
+	int height = *(int*) ptr; ptr += 4;
+	int stride = *(int*) ptr; ptr += 4;
+	printf("%d, %d, %d\n", width, height, stride);
+	const float* values = reinterpret_cast<const float*>(ptr);
+
+	*offset = *offset + 12 + sizeof(float) * width*height;
+	Matrix matrix;
+	matrix.width = width;
+	matrix.height = height;
+	matrix.stride = stride;
+	matrix.elements = const_cast<float*>(values);
+	return matrix;
+}
+
+
+__device__ int naive_wrapper(int offset) {
+	printf("Naive Wrapper: made it here\n");
+	Matrix a = from_raw(&offset);
+	printf("%d\n", sizeof(a));
+	Matrix b = from_raw(&offset);
+	int res_off = offset;
+	printf("First two elements at %d\n", offset);
+
+	printf("Width: %d; Height: %d; element_1: %f\n", a.width, a.height, a.elements[0]);
+	printf("Width: %d; Height: %d; element_1: %f\n", b.width, b.height, b.elements[0]);
+
+	Matrix c = from_raw(&offset);
+	c.width = c.height = c.stride = 32;
+
+	int ret =  matmul_kernel(a, b, &c);
+
+	printf("Width: %d; Height: %d; element_1: %f\n", c.width, c.height, c.elements[0]);
+	
+	for(int i = 0; i < c.width*c.height; i++) {
+		printf("%f;%f\n", b.elements[i], c.elements[i]);
+	}
+
+	d_input_queue[0].offset = res_off;
+	d_arg_buffer[res_off] = d_arg_buffer[res_off + 4] = d_arg_buffer[res_off + 8] = 32;
+	printf("%d, %d\n", d_input_queue[0].offset, res_off);
+	printf("%f, \n", d_arg_buffer[res_off + 12]);
+
+	return ret;
+
+	//Matrix* C = (Matrix *) res;
+	//int a = matmul_kernel(args->A, args->B, *C);		
+	//return a;
+	
+}
+
+void cpu_matmul(const Matrix& mat1, const Matrix& mat2, Matrix& res_mat) {
+
+	for (int i = 0; i < mat1.height; i++) {
+		for (int j = 0; j < mat2.width; j++) {
+			float dot_product = 0.0;
+			for (int k = 0; k < mat1.width; k++) {
+				dot_product += mat1.elements[i * mat1.width + k] * mat2.elements[k * mat2.width + j];
+			}
+			res_mat.elements[i * mat2.width + j] = dot_product;
+		}
+	}
+}
+
+void get_result_matmul(){
+	printf("Comparing Results\n");
+	Input input;
+	cudaError_t err = cudaMemcpyAsync(&input, diq, sizeof(Input), cudaMemcpyDeviceToHost, qStream);
+
+	printf("%s\n", cudaGetErrorName(err));
+
+	printf("Got the input offset: %d\n", input.offset);
+	cudaStreamSynchronize(qStream);
+	uint8_t* res = (uint8_t*) malloc(3*sizeof(int) + 32*32 * sizeof(float));
+	printf("%d\n", input.offset);
+	err = cudaMemcpyAsync(res, dab + input.offset, 3*sizeof(int) + 32*32 * sizeof(float), cudaMemcpyDeviceToHost, qStream);
+
+	printf("%s\n", cudaGetErrorName(err));
+	Matrix mres = unflatten(res);
+	printMatrix(mres);
+	
+	Matrix res_mat = createMatrix(32, 32);
+	cpu_matmul(mA, mB, res_mat);
+	std::cout << "Comparison: " << (compare(res_mat, mres) ? "CPU result = GPU Naive result" : "CPU result != GPU Naive Result") << "\n";
+	
 }
 
 __device__ int shared_wrapper(void* arg, void* res) { 
@@ -55,15 +227,16 @@ __device__ int shared_wrapper(void* arg, void* res) {
 
 //Naive Implementation - One thread for each value in result_matrix
 //For simplity width/height are a multiple of the block size
-__device__ int matmul_kernel(const Matrix mat1, const Matrix mat2, Matrix res_mat) {
-	return 0;
+__device__ int matmul_kernel(const Matrix mat1, const Matrix mat2, Matrix* res_mat) {
+	printf("In matrix mul kernel\n");
     float value = 0;
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     for (int i = 0; i < mat1.width; i++) {
         value += mat1.elements[row * mat1.width + i] * mat2.elements[i * mat2.width + col];
 	}
-    res_mat.elements[row * res_mat.width + col] = value;
+
+    res_mat->elements[row * res_mat->width + col] = value;
 	return 0;
 }
 

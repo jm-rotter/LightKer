@@ -35,6 +35,9 @@
 #include "lk_device.h"
 #include "lk_host.h"
 #include <iostream>
+#include <unistd.h>
+#include <thread>
+#include <chrono>
 
 /* To debug */
 #ifndef USE_APP_MAIN
@@ -97,90 +100,107 @@ int main(int argc, char **argv)
   //{
     /** SMALL OFFLOAD (WORK) **/
     //GETTIME_TIC;
-    scheduleMatMul();
-    //more = lkSmallOffloadMultiple(0x0, data, blknum.x);
-    //GETTIME_TOC;
-   // assign_total += clock_getdiff_nsec(spec_start, spec_stop);
 
-    //clock_gettime(CLOCK_MONOTONIC, &app_start);
-    /** TRIGGER (WORK) **/
-    //GETTIME_TIC;
-    //lkTriggerMultiple();
-    //GETTIME_TOC;
-    //trigger_total += clock_getdiff_nsec(spec_start, spec_stop);
-//     GETTIME_LOG("Partial launch time %lu\n", clock_getdiff_nsec(spec_start, spec_stop));
-//     GETTIME_LOG("lkTriggerMultipleTime1 %lu\n", lkTriggerMultipleTime1);
-//     GETTIME_LOG("lkTriggerMultipleTime2 %lu\n", lkTriggerMultipleTime2);
-//     GETTIME_LOG("lkTriggerMultipleTime3 %lu\n", lkTriggerMultipleTime3);
-    
-    /** WAIT (WORK) **/
-   // GETTIME_TIC;
-    //lkWaitMultiple();
-    //GETTIME_TOC;
-    //wait_total += clock_getdiff_nsec(spec_start, spec_stop);
-    //clock_gettime(CLOCK_MONOTONIC, &app_stop);
-//     printf("Joined %d SMs. Fetching results\n", blknum.x);
-    
-    /** RETRIEVE DATA (WORK) **/
-   // GETTIME_TIC;
-    //lkRetrieveDataMultiple(0x0, res, blknum.x);
-    //GETTIME_TOC;
-    //retrieve_total += clock_getdiff_nsec(spec_start, spec_stop);
-    
-    //app_total += clock_getdiff_nsec(app_start, app_stop);
-    
-    /** 'Empty' wait */
+  std::this_thread::sleep_for(std::chrono::seconds(1));
+  log("test\n");
+  scheduleMatMul();
+  while(true) {
+	  log("sleeping\n");
+	  std::this_thread::sleep_for(std::chrono::seconds(1));
+	  lkMailboxFlushAsync(true);
+	  lkMailboxFlushAsync(false);
+
+	  lkMailboxPrint("Sleeping watcher", 0);
+	  if(lkHFromDevice(0) == THREAD_FINISHED) {
+		  lkHToDevice(0) = THREAD_NOP;
+		  printf("Got msg Thread Finished");
+		  get_result_matmul();
+	  }
+
+  }
+  //more = lkSmallOffloadMultiple(0x0, data, blknum.x);
+  //GETTIME_TOC;
+  // assign_total += clock_getdiff_nsec(spec_start, spec_stop);
+
+  //clock_gettime(CLOCK_MONOTONIC, &app_start);
+  /** TRIGGER (WORK) **/
+  //GETTIME_TIC;
+  //lkTriggerMultiple();
+  //GETTIME_TOC;
+  //trigger_total += clock_getdiff_nsec(spec_start, spec_stop);
+  //     GETTIME_LOG("Partial launch time %lu\n", clock_getdiff_nsec(spec_start, spec_stop));
+  //     GETTIME_LOG("lkTriggerMultipleTime1 %lu\n", lkTriggerMultipleTime1);
+  //     GETTIME_LOG("lkTriggerMultipleTime2 %lu\n", lkTriggerMultipleTime2);
+  //     GETTIME_LOG("lkTriggerMultipleTime3 %lu\n", lkTriggerMultipleTime3);
+
+  /** WAIT (WORK) **/
+  // GETTIME_TIC;
+  //lkWaitMultiple();
+  //GETTIME_TOC;
+  //wait_total += clock_getdiff_nsec(spec_start, spec_stop);
+  //clock_gettime(CLOCK_MONOTONIC, &app_stop);
+  //     printf("Joined %d SMs. Fetching results\n", blknum.x);
+
+  /** RETRIEVE DATA (WORK) **/
+  // GETTIME_TIC;
+  //lkRetrieveDataMultiple(0x0, res, blknum.x);
+  //GETTIME_TOC;
+  //retrieve_total += clock_getdiff_nsec(spec_start, spec_stop);
+
+  //app_total += clock_getdiff_nsec(app_start, app_stop);
+
+  /** 'Empty' wait */
 #if 0
-    lkProfiling = 1;
-    GETTIME_TIC;
-    lkWaitMultiple();
-    GETTIME_TOC;
-    wait2_total += clock_getdiff_nsec(spec_start, spec_stop);
-    lkProfiling = 0;
+  lkProfiling = 1;
+  GETTIME_TIC;
+  lkWaitMultiple();
+  GETTIME_TOC;
+  wait2_total += clock_getdiff_nsec(spec_start, spec_stop);
+  lkProfiling = 0;
 #endif
 
-    struct timespec ts;
-    ts.tv_sec  = 0;
-    ts.tv_nsec = 6000L;
-    if(nanosleep(&ts, NULL) < 0)
-    {
-      printf("Error in sleep!\n");
-    }
-      
-   // num_loops++;
+  struct timespec ts;
+  ts.tv_sec  = 0;
+  ts.tv_nsec = 6000L;
+  if(nanosleep(&ts, NULL) < 0)
+  {
+	  printf("Error in sleep!\n");
+  }
+
+  // num_loops++;
   //} // work loop
-  
-    
+
+
   /** DISPOSE (DISPOSE) **/
   //GETTIME_TIC;
   //lkDispose();
   //GETTIME_TOC;
   //dispose_total = clock_getdiff_nsec(spec_start, spec_stop);
-  
+
   /* Print timing measurements */
 #if 0
   GETTIME_LOG("Gettime %lu\n", gettime_total);
   GETTIME_LOG("Init Tot %lu\n", init_total);
   GETTIME_LOG("These (AVG) numbers are performed on %d measurements\n", num_loops);
-//   GETTIME_LOG("TOT copy_data(work) %lu\n", assign_total);
+  //   GETTIME_LOG("TOT copy_data(work) %lu\n", assign_total);
   GETTIME_LOG("AVG copy_data(work) %lu\n", assign_total / num_loops);
   GETTIME_LOG("AVG trigger(work) %lu\n", trigger_total / num_loops);
-//   GETTIME_LOG("AVG wait %lu\n", wait_total / (blknum.x * num_loops));
-//   GETTIME_LOG("AVG empty wait %lu\n", wait2_total / (blknum.x * num_loops));
+  //   GETTIME_LOG("AVG wait %lu\n", wait_total / (blknum.x * num_loops));
+  //   GETTIME_LOG("AVG empty wait %lu\n", wait2_total / (blknum.x * num_loops));
   GETTIME_LOG("AVG wait %lu\n", wait_total / num_loops);
   GETTIME_LOG("AVG empty wait %lu\n", wait2_total / num_loops);
   GETTIME_LOG("AVG retrieve data %lu\n", retrieve_total / num_loops);
-//   GETTIME_LOG("AVG wait #1 %lu\n", lkWaitTime1 / num_loops);
-//   GETTIME_LOG("AVG wait #2 %lu\n", lkWaitTime2 / num_loops);
-//   GETTIME_LOG("AVG wait #3 %lu\n", lkWaitTime3 / num_loops);
+  //   GETTIME_LOG("AVG wait #1 %lu\n", lkWaitTime1 / num_loops);
+  //   GETTIME_LOG("AVG wait #2 %lu\n", lkWaitTime2 / num_loops);
+  //   GETTIME_LOG("AVG wait #3 %lu\n", lkWaitTime3 / num_loops);
   GETTIME_LOG("dispose %lu\n", dispose_total);
 #endif
-  
+
   //GETTIME_LOG("[HEADER] Gettime;Boot (Init);Alloc (Init);App alloc (Init);Launch (Init);Init (Tot);Copy data (Work);Trigger (Work);Wait (Work);Empty wait (Work);Retrieve data (Work);Dispose (Tot);\n");
   //GETTIME_LOG("[PROFILE] %lu;%lu;%lu;%lu;%lu;%lu;%lu;%lu;%lu;%lu;%lu;%lu;\n", gettime_total, boot_total, alloc_total, appalloc_total, launch_total, init_total, assign_total/num_loops, trigger_total/num_loops, wait_total/num_loops, wait2_total/num_loops, retrieve_total/num_loops, dispose_total);  
   //GETTIME_LOG("[TOTAL] %lu\n", app_total / num_loops);
   //GETTIME_LOG("[COPYIN] %lu\n", assign_total / num_loops);
-  
+
   //printf("num_loops %d total %lu avg %lu\n", num_loops, assign_total + wait_total, (assign_total + wait_total) / num_loops);
 }
 #endif
@@ -189,75 +209,75 @@ int main(int argc, char **argv)
 #include <getopt.h>
 void lkParseCmdLine(int argc, char **argv, dim3 * blknum, dim3 * blkdim, int *shmem, bool *cudaMode)
 {
-  static struct option long_options[] =
-  {
-    {"numblock",  required_argument,  0, 'b'},
-    {"cuda-mode", no_argument,        0, 'c'},
-    {"help",      no_argument,        0, 'h'},
-    {"shmem",     required_argument,  0, 's'},
-    {"dimblock",  required_argument,  0, 't'},
-  };
+	static struct option long_options[] =
+	{
+		{"numblock",  required_argument,  0, 'b'},
+		{"cuda-mode", no_argument,        0, 'c'},
+		{"help",      no_argument,        0, 'h'},
+		{"shmem",     required_argument,  0, 's'},
+		{"dimblock",  required_argument,  0, 't'},
+	};
 
-  int ret, opt_index = 0, o;
+	int ret, opt_index = 0, o;
 
-  while (1)
-  {
-    ret = getopt_long(argc, argv, "b:cf:hs:t:", long_options, &opt_index);
+	while (1)
+	{
+		ret = getopt_long(argc, argv, "b:cf:hs:t:", long_options, &opt_index);
 
-    if (ret == -1)
-      break;
+		if (ret == -1)
+			break;
 
-    switch (ret)
-    {
-      case 'b':
-        o = atoi(optarg);
-        if (o <= MAX_NUM_BLOCKS)
-        {
-          if (o >= MIN_NUM_BLOCKS)
-            blknum->x = o;
-          else
-            blknum->x = MIN_NUM_BLOCKS;
-        }
-        log("Number of Blocks set to %d\n", blknum->x);
-        break;
-        
-      case 'c':
-        *cudaMode = !*cudaMode;
-        log("Setting CUDA mode to '%s'\n", cudaMode ? "on" : "off");
-        break;
-      
-      case 'h':
-        printf("Available options:\n\n");
-        printf("-b x    Number of CUDA threads blocks (default %d)\n", blknum->x);
-        printf("-c      Toggles CUDA mode (default %s)\n", cudaMode ? "yes" : "no");
-        printf("-s x    Device per-SM dynamic Shared Memory size in bytes (default %d)\n", *shmem);
-        printf("-t x    Number of CUDA threads per block (default %d)\n", blkdim->x);
-        
-        printf("\nReport bugs to: mailing-address\n");
-        printf("pkg home page: <http://www.gnu.org/software/pkg/>\n");
-        printf("General help using GNU software: <http://www.gnu.org/gethelp/>\n");
-        exit(0);
-        break;        
-          
-      case 's':
-        o = atoi(optarg);
-        if (o > 0)
-          *shmem = o;
-        log("SHMEM dim set to %d\n", *shmem);
-        break;
-        
-      case 't':
-        o = atoi(optarg);
-        if (o >= 1 && o <= MAX_BLOCK_DIM)
-          blkdim->x = o;
-        log("Number of Threads per Block set to %d\n", blkdim->x);
-        break;
-          
-      default:
-        printf("Unknown switch '%c'. Ignoring..\n", ret);
-        break;
-    } // switch
-    
-  } // while
-  
+		switch (ret)
+		{
+			case 'b':
+				o = atoi(optarg);
+				if (o <= MAX_NUM_BLOCKS)
+				{
+					if (o >= MIN_NUM_BLOCKS)
+						blknum->x = o;
+					else
+						blknum->x = MIN_NUM_BLOCKS;
+				}
+				log("Number of Blocks set to %d\n", blknum->x);
+				break;
+
+			case 'c':
+				*cudaMode = !*cudaMode;
+				log("Setting CUDA mode to '%s'\n", cudaMode ? "on" : "off");
+				break;
+
+			case 'h':
+				printf("Available options:\n\n");
+				printf("-b x    Number of CUDA threads blocks (default %d)\n", blknum->x);
+				printf("-c      Toggles CUDA mode (default %s)\n", cudaMode ? "yes" : "no");
+				printf("-s x    Device per-SM dynamic Shared Memory size in bytes (default %d)\n", *shmem);
+				printf("-t x    Number of CUDA threads per block (default %d)\n", blkdim->x);
+
+				printf("\nReport bugs to: mailing-address\n");
+				printf("pkg home page: <http://www.gnu.org/software/pkg/>\n");
+				printf("General help using GNU software: <http://www.gnu.org/gethelp/>\n");
+				exit(0);
+				break;        
+
+			case 's':
+				o = atoi(optarg);
+				if (o > 0)
+					*shmem = o;
+				log("SHMEM dim set to %d\n", *shmem);
+				break;
+
+			case 't':
+				o = atoi(optarg);
+				if (o >= 1 && o <= MAX_BLOCK_DIM)
+					blkdim->x = o;
+				log("Number of Threads per Block set to %d\n", blkdim->x);
+				break;
+
+			default:
+				printf("Unknown switch '%c'. Ignoring..\n", ret);
+				break;
+		} // switch
+
+	} // while
+
 } // lkParseCmdLines

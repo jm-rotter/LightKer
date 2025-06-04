@@ -37,3 +37,10 @@ Matrix createMatrix(int width, int height) {
 	return mat;
 }
 
+void printMatrix(Matrix matrix) {
+	printf("Width: %d; Height: %d; element_1: %f\n", matrix.width, matrix.height, matrix.elements[0]);
+
+	for(int i = 0; i < 5; i++) {
+		printf("%f\n", matrix.elements[i]);
+	}
+}
