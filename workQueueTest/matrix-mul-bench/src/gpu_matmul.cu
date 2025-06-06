@@ -7,6 +7,7 @@
 #include "lk_workqueue.h"
 #include <stdio.h>
 #include <iostream>
+#include "lk_gpuMem.h"
 
 
 #define BLOCK_SIZE 16
@@ -32,50 +33,13 @@ MatMulArgs generateMatDataPointer() {
 	return data;
 }
 
-void scheduleMatMul() {
-	Input input;
-	input.fn = 0;
-	input.offset = 0;
- 
+int scheduleMatMul() {
 	MatMulArgs data = generateMatDataPointer();
 	int length;
 	uint8_t* flattened = flatten(data, &length);
-	enqueue(input, flattened, length);
-}
-
-__device__ void hhexdump(void *ptr, int buflen) {
-  unsigned char *buf = (unsigned char*)ptr;
-  int i, j;
-  for (i=0; i<buflen; i+=16) {
-    printf("%06x: ", i);
-    for (j=0; j<16; j++) 
-      if (i+j < buflen)
-        printf("%02x ", buf[i+j]);
-      else
-        printf("   ");
-    printf(" ");
-    for (j=0; j<16; j++) 
-      if (i+j < buflen)
-        printf("%c", '.');
-    printf("\n");
-  }
-}
-void hexdump(void *ptr, int buflen) {
-  unsigned char *buf = (unsigned char*)ptr;
-  int i, j;
-  for (i=0; i<buflen; i+=16) {
-    printf("%06x: ", i);
-    for (j=0; j<16; j++) 
-      if (i+j < buflen)
-        printf("%02x ", buf[i+j]);
-      else
-        printf("   ");
-    printf(" ");
-    for (j=0; j<16; j++) 
-      if (i+j < buflen)
-        printf("%c", isprint(buf[i+j]) ? buf[i+j] : '.');
-    printf("\n");
-  }
+	
+	int idx = enqueue(flattened, length, length/2, 0);
+	return idx;
 }
 
 
@@ -93,8 +57,6 @@ uint8_t* flatten(const MatMulArgs src, int* outSize) {
 	memcpy(ptr, &src.A.stride, sizeof(int)); ptr += sizeof(int);
 	memcpy(ptr, src.A.elements, sizeof(float) * lengthA); ptr += sizeof(float) * lengthA;
 	
-
-
 
 	memcpy(ptr, &src.B.width, sizeof(int)); ptr += sizeof(int);
 	memcpy(ptr, &src.B.height, sizeof(int)); ptr +=sizeof(int);
@@ -125,10 +87,8 @@ Matrix unflatten(uint8_t* src) {
 
 }
 
-__device__ Matrix from_raw(int* offset) {
-	printf("from raw hexdump\n");
-//	hhexdump(d_arg_buffer, 8216);	
-	uint8_t* ptr = d_arg_buffer + *offset;
+__device__ Matrix from_raw(void* ptr, int* offset) {
+	ptr =  ptr + *offset;
 
 	int width = *(int*) ptr; ptr += 4;
 	int height = *(int*) ptr; ptr += 4;
@@ -146,33 +106,22 @@ __device__ Matrix from_raw(int* offset) {
 }
 
 
-__device__ int naive_wrapper(int offset) {
+__device__ int naive_wrapper(Task task) {
 	printf("Naive Wrapper: made it here\n");
-	Matrix a = from_raw(&offset);
-	printf("%d\n", sizeof(a));
-	Matrix b = from_raw(&offset);
-	int res_off = offset;
-	printf("First two elements at %d\n", offset);
+	Matrix a = from_raw(devInputBufferPointers[task.epoch], &task.input_offset);
+	Matrix b = from_raw(devInputBufferPointers[task.epoch],&task.input_offset);
 
 	printf("Width: %d; Height: %d; element_1: %f\n", a.width, a.height, a.elements[0]);
 	printf("Width: %d; Height: %d; element_1: %f\n", b.width, b.height, b.elements[0]);
 
-	Matrix c = from_raw(&offset);
-	c.width = c.height = c.stride = 16;
+	((uint8_t*)devOutputBufferPointers[task.epoch] + task.output_offset)[0] = ((uint8_t*)devOutputBufferPointers[task.epoch] + task.output_offset)[4] = ((uint8_t*)devOutputBufferPointers[task.epoch] + task.output_offset)[8] = 16; 
+
+	Matrix c = from_raw(devOutputBufferPointers[task.epoch], &task.output_offset);
 
 	int ret =  matmul_kernel(a, b, &c);
 
 	printf("Width: %d; Height: %d; element_1: %f\n", c.width, c.height, c.elements[0]);
 	
-	for(int i = 0; i < c.width*c.height; i++) {
-		printf("%f;%f\n", b.elements[i], c.elements[i]);
-	}
-
-	d_input_queue[0].offset = res_off;
-	d_arg_buffer[res_off] = d_arg_buffer[res_off + 4] = d_arg_buffer[res_off + 8] = 16;
-	printf("%d, %d\n", d_input_queue[0].offset, res_off);
-	printf("%f, \n", d_arg_buffer[res_off + 12]);
-
 	return ret;
 
 	//Matrix* C = (Matrix *) res;
@@ -194,18 +143,17 @@ void cpu_matmul(const Matrix& mat1, const Matrix& mat2, Matrix& res_mat) {
 	}
 }
 
-void get_result_matmul(){
+void get_result_matmul(int taskIdx){
+
 	printf("Comparing Results\n");
-	Input input;
-	cudaError_t err = cudaMemcpyAsync(&input, diq, sizeof(Input), cudaMemcpyDeviceToHost, qStream);
+	Task task;
+	cudaError_t err = cudaMemcpyAsync(&task, dtq + taskIdx, sizeof(Task), cudaMemcpyDeviceToHost, qStream);
 
 	printf("%s\n", cudaGetErrorName(err));
 
-	printf("Got the input offset: %d\n", input.offset);
 	cudaStreamSynchronize(qStream);
 	uint8_t* res = (uint8_t*) malloc(3*sizeof(int) + 16*16 * sizeof(float));
-	printf("%d\n", input.offset);
-	err = cudaMemcpyAsync(res, dab + input.offset, 3*sizeof(int) + 16*16 * sizeof(float), cudaMemcpyDeviceToHost, qStream);
+	err = cudaMemcpyAsync(res, output_arenas[task.epoch].base_ptr + task.output_offset, 3*sizeof(int) + 16*16 * sizeof(float), cudaMemcpyDeviceToHost, qStream);
 
 	printf("%s\n", cudaGetErrorName(err));
 	Matrix mres = unflatten(res);

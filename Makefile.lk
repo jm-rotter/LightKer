@@ -38,7 +38,7 @@ INCLUDEDIR = ${LK_HOME}
 
 # _device_ functions should be compiled in a single unit. FIXME
 # APPSRCS = $(APPDIR)/app.cu
-COREFILES = $(COREDIR)/lk_device.cu $(COREDIR)/lk_host.cu $(COREDIR)/lk_mailbox.cu $(COREDIR)/lk_workqueue.cu
+COREFILES = $(COREDIR)/lk_device.cu $(COREDIR)/lk_host.cu $(COREDIR)/lk_mailbox.cu $(COREDIR)/lk_workqueue.cu $(COREDIR)/lk_gpuMem.cu
 #SRCS=${APPSRCS} ${COREFILES}
 
 SRCS=${COREDIR}/lk_main.cu

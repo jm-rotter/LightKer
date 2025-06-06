@@ -18,6 +18,7 @@
  */
 
 #include <assert.h>
+#include "lk_gpuMem.h"
 #include "lk_workqueue.h"
 #include <pthread.h>
 pthread_t syncThread;
@@ -97,6 +98,7 @@ void lkLaunch(void (*kernel) (volatile mailbox_elem_t *, volatile mailbox_elem_t
 
   dim3 gRidDim(1);
   dim3 bLockDim(16, 16);
+  //dim3 bLockDim(1);
   kernel <<< gRidDim, bLockDim, shmem, kernel_stream >>> (d_to_device, d_from_device);
 
 
@@ -169,6 +171,7 @@ void lkInit(unsigned int blknum_x, unsigned int blkdim_x,
     die("Mailbox initialization failed\n");
 
   initQueue();
+  init_arenas();
 	
   
   /* Results from Device */

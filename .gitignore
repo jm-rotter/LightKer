@@ -4,3 +4,4 @@ persistent
 apps/*
 apps/
 example.cu
+*.tar.gz

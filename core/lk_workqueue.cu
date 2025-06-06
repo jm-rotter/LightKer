@@ -6,6 +6,7 @@
 #include "lk_workqueue.h"
 #include "lk_host.h"
 #include "utils.h"
+#include "lk_gpuMem.h"
 #include <sys/types.h>
 
 
@@ -13,16 +14,12 @@
 int h_queueHead; 
 int h_taskCounter;
 
-__device__ Input* d_input_queue;
+__device__ Task* d_task_queue;
 __device__ int* d_tail;
-__device__ int* d_taskCounter;
-__device__ uint8_t* d_arg_buffer;
 
 cudaStream_t qStream;
-Input* diq;
-int* dtc;
-int* dt;
-uint8_t* dab;
+Task* dtq; //Host pointer to device task queue 
+int* dt;  //Host pointer to alloc tail
 
 #define DeviceWriteMyMailboxFrom(_val)  _vcast(from_device[blockIdx.x]) = (_val)
 #define HostWriteMyMailboxTo(_val)  _vcast(h_to_device[0]) = (_val)
@@ -31,45 +28,29 @@ void initQueue() {
 	h_queueHead = 0;
 	h_taskCounter = 0;
 
-	//cudaMemset(&d_input_queue, 0, WORK_QUEUE_LENGTH * sizeof(Input));
-	//cudaMemset(&d_tail, 0,  sizeof(int));
-	//cudaMemcpyToSymbol(d_taskCounter, &h_taskCounter,  sizeof(int));
-	//cudaMemset(&d_arg_buffer, 0, ARG_BUFFER_SIZE* sizeof(int));
-	//
-
-	cudaMalloc(&diq, sizeof(Input) * WORK_QUEUE_LENGTH);
-	cudaMalloc(&dtc, sizeof(int));
+	cudaMalloc(&dtq, sizeof(Task) * WORK_QUEUE_LENGTH);
 	cudaMalloc(&dt, sizeof(int));
-	cudaMalloc(&dab, sizeof(uint8_t) * ARG_BUFFER_SIZE);
 
-	//init both to 0
-	cudaMemcpy(dtc, &h_taskCounter, sizeof(int), cudaMemcpyHostToDevice);
+	//Just init tail to 0. As h_taskcounter is already 0
 	cudaMemcpy(dt, &h_taskCounter, sizeof(int), cudaMemcpyHostToDevice);
 	
-	cudaMemcpyToSymbol(d_input_queue, &diq, sizeof(Input*));
-	cudaMemcpyToSymbol(d_taskCounter, &dtc, sizeof(int*));
+	cudaMemcpyToSymbol(d_task_queue, &dtq, sizeof(Task*));
 	cudaMemcpyToSymbol(d_tail, &dt, sizeof(int*));
-	cudaMemcpyToSymbol(d_arg_buffer, &dab, sizeof(dab));
 	cudaStreamCreate(&qStream);
-
 }
 
-
-//__device__ const WorkFn lkTasks[] = {naive_wrapper, shared_wrapper};
-
 const char* lkTasksDesc[] = {"naive", "shared_mem"};
-
 
 __device__ void sleep() {
 	return;
 }
 
-__device__ bool execute(Input* input) {
+__device__ bool execute(Task task) {
 	log("Executing function 0\n");
-	log("Offset is %d\n",input->offset);
-	int offset = input->offset;
-	naive_wrapper(offset);
+	log("Input Offset is %d\n",task.input_offset);
+	log("Output Offset is %d\n",task.output_offset);
 
+	naive_wrapper(task);
 
 	//lkTasks[task->input.fn](task->input.arg, task->res);
 	//naive_wrapper(task->input.arg, task->res);
@@ -94,7 +75,7 @@ __device__ bool dequeue(volatile mailbox_elem_t * from_device){
 	int tail = 0;
 	int idx = tail % WORK_QUEUE_LENGTH;
 
-	execute(&d_input_queue[idx]);
+	execute(d_task_queue[idx]);
 
     DeviceWriteMyMailboxFrom(THREAD_FINISHED);
 	return true;
@@ -102,33 +83,52 @@ __device__ bool dequeue(volatile mailbox_elem_t * from_device){
 
 
 
-
-bool enqueue(Input input, void* data, int size) {
-	log("Enqueueing task: %s\n", lkTasksDesc[input.fn]);
+//returns task idx in task queue
+int enqueue(void* data, int input_size, int output_size, int taskId) {
+	log("Enqueueing task: %d\n", taskId);
 	if(h_taskCounter >= WORK_QUEUE_LENGTH) {
-		return false;
+		return -1;
 	}
+
+	Task task;
+	task.fn = taskId;
+	
+	int epoch = getEpoch();
+	int ioffset = getIOffset(epoch);
+	int roffset = getROffset(epoch);
+
+	int success = allocate(input_size, output_size);
+
+	switch(success) {
+		case -1:
+			return -1;
+			break;
+		case 0:
+			task.epoch = (epoch + 1) % NUM_EPOCHS;
+			task.input_offset = 0;
+			task.output_offset = 0;
+			break;
+		case 1: 
+			task.epoch = epoch;
+			task.input_offset = ioffset;
+			task.output_offset = roffset;
+			break;
+	}
+
+	cudaError_t err = cudaMemcpyAsync(input_arenas[task.epoch].base_ptr + task.input_offset, data, input_size, cudaMemcpyHostToDevice, qStream);
+
+	printf("Memcpy task data async error:%s\n", cudaGetErrorString(err));
+	
+
+	err = cudaMemcpyAsync(dtq + h_queueHead, &task, sizeof(Task), cudaMemcpyHostToDevice, qStream);
+
+	printf("Memcpy task metadata async error:%s\n", cudaGetErrorString(err));
+	
 	h_queueHead = (h_queueHead+1) % WORK_QUEUE_LENGTH;
-
-	//printf("%d\n", ((int*)data)[0]);
-
-
-	//uint8_t* pinned;
-	//cudaMallocHost((void**)&pinned, size);
-	//memcpy(pinned,data,size);
-
-	//printf("%d\n", ((int*)pinned)[0]);
-
-	cudaError_t err = cudaMemcpyAsync(dab, data, size, cudaMemcpyHostToDevice, qStream);
-
-	printf("memcpy async error:%s\n", cudaGetErrorString(err));
-
+	
 	h_taskCounter++;
 
-	err = cudaMemcpyAsync(diq, &input, sizeof(Input), cudaMemcpyHostToDevice, qStream);
-		
-	printf("memcpy async error:%s\n", cudaGetErrorString(err));
-
+	//Going to remove at some point Host shouldn't need to notify GPU of new tasks
 	cudaStreamSynchronize(qStream);
 	
 	log("memLoaded\n");
@@ -137,7 +137,6 @@ bool enqueue(Input input, void* data, int size) {
 
 	lkMailboxFlushSM(false, 0);
 	
-	
-	return true;
+	return h_queueHead -1;
 } 
 

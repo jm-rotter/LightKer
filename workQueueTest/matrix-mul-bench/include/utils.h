@@ -22,3 +22,4 @@ bool compare(const Matrix& mat1, const Matrix& mat2);
 double time_in_ms(std::chrono::high_resolution_clock::time_point start, std::chrono::high_resolution_clock::time_point end);
 Matrix createMatrix(int width, int height);
 void printMatrix(Matrix matrix);
+void hexdump(void *ptr, int buflen);

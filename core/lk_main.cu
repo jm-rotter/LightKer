@@ -103,7 +103,7 @@ int main(int argc, char **argv)
 
   std::this_thread::sleep_for(std::chrono::seconds(1));
   log("test\n");
-  scheduleMatMul();
+  int resultTaskIdx = scheduleMatMul();
   while(true) {
 	  log("sleeping\n");
 	  std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -114,7 +114,7 @@ int main(int argc, char **argv)
 	  if(lkHFromDevice(0) == THREAD_FINISHED) {
 		  lkHToDevice(0) = THREAD_NOP;
 		  printf("Got msg Thread Finished");
-		  get_result_matmul();
+		  get_result_matmul(resultTaskIdx);
 	  }
 
   }
