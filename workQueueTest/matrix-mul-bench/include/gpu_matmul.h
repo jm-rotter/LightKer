@@ -7,7 +7,7 @@ typedef struct {
 	Matrix B;
 } MatMulArgs;
 
-MatMulArgs generateMatDataPointer();
+MatMulArgs generateMatDataPointer(int stidx);
 
 //void gpu_matmul(const Matrix& mat1, const Matrix& mat2, Matrix& res_mat, GPU_imp imp);
 __device__ int matmul_kernel(const Matrix mat1, const Matrix mat2, Matrix* res_mat);
@@ -20,10 +20,10 @@ __device__ int naive_wrapper(Task task);
 
 
 
-int scheduleMatMul();
+int scheduleMatMul(int stdix);
 uint8_t* flatten(const MatMulArgs src, int* outSize);
 Matrix unflatten(uint8_t* src);
-void get_result_matmul(int taskIdx);
+void get_result_matmul(int taskIdx, int stidx);
 
 __device__ Matrix from_raw(void* ptr, int* offset);
 

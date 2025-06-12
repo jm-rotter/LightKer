@@ -434,13 +434,11 @@ void lkDispose()
   checkCudaErrors(cudaDeviceSynchronize());
   log("Persistent LK thread stopped.\n");
   
-  checkCudaErrors(cudaGetLastError());
 
 //   log("Resetting Mailbox..\n");
   lkMailboxFree();
   
 //   log("Resetting device..\n");
-  checkCudaErrors(cudaDeviceReset());
   
 //   log("Other deallocations..\n");
   free(workingSM);

@@ -46,13 +46,13 @@
 __global__ void lkUniformPollingCuda(volatile mailbox_elem_t * to_device,
 		volatile mailbox_elem_t * from_device)
 {
-	printf("nothere\n");
+	//printf("nothere\n");
 	//__shared__ int res_shared;
 	int blkid = blockIdx.x;
 	int tid = threadIdx.x;
 
-	log("I am thread %d block %d, my SM ID is %d, my warp ID is %d, and my warp lane is %d\n",
-			tid, blkid, __mysmid(), __mywarpid(), __mylaneid());
+	//log("I am thread %d block %d, my SM ID is %d, my warp ID is %d, and my warp lane is %d\n",
+	//		tid, blkid, __mysmid(), __mywarpid(), __mylaneid());
 	//   log("data ptr @0x%x res ptr @0x%x lk_results @0x%x\n", _mycast_ data, _mycast_ res, _mycast_ lk_results);
 
 	if(blkid != __mysmid())
@@ -71,55 +71,26 @@ __global__ void lkUniformPollingCuda(volatile mailbox_elem_t * to_device,
 	}  
 	
 	__syncthreads();
-
+	int counter = 0;
 	while (1)
 	{
-
 		// Shut down
 		if (DeviceReadMyMailboxTo() == THREAD_EXIT) {
 			break;
 		}
 		// Time to work!
-		else if (DeviceReadMyMailboxTo() == THREAD_WORK && DeviceReadMyMailboxFrom() != THREAD_FINISHED)
-		{
-			log("Entered workloop\n");
-			//if (tid == 0)
-			//{
-			log("About to dequeue\n"); 
-			dequeue(from_device);
-
-			if (tid==0){
-				DeviceWriteMyMailboxFrom(THREAD_WORKING);
-			}
-			log("Hi, I'm block %d and I received sth to do.\n", blkid);
-			//res_shared = 0;
-			//}
-			//__syncthreads();
-
-			/* if res_shared == 0 => threads finished correctly */
-			////int lk_res = lkWorkCuda(&data[blkid], &res[blkid]);
-			//atomicAdd(&res_shared, lk_res);
-
+		if (DeviceReadMyMailboxTo() == THREAD_WORK && DeviceReadMyMailboxFrom() != THREAD_FINISHED) {
 			__syncthreads();
-
-			if (tid == 0)
-			{
-				log("work finished\n");
-				//lk_results[blkid] = res_shared == 0 ? LK_EXEC_OK : LK_EXEC_APP_ERR;
-
-				//log("Work finished! Set Mailbox from_device to THREAD_FINISHED (%d), lk_results[%d] is %d\n", THREAD_FINISHED, blkid, lk_results[blkid]);
-				DeviceWriteMyMailboxFrom(THREAD_FINISHED);
-				//         log("Now Mailbox from_device is %d\n", DeviceReadMyMailboxFrom());
-			}
-			//       break;
-		} // if
-
+			dequeue(from_device);
+			__syncthreads();
+		}
+		
 		// Host got results
-		else if (DeviceReadMyMailboxTo() == THREAD_NOP)
+		else if (DeviceReadMyMailboxTo() == THREAD_NOP){
 			DeviceWriteMyMailboxFrom(THREAD_NOP);
-
-		else
-		{}
+		}
+//		else
+//		{}
 
 	} // while(1)
 

@@ -39,13 +39,27 @@
 #include <thread>
 #include <chrono>
 
+#include <csignal>
+
+void shutdown_handler(int signum) {
+	printf("handler\n");
+	std::cerr << "Caught signal " << signum << ", cleaning up GPU...\n";
+	lkDispose();
+	cudaDeviceSynchronize();
+	cudaDeviceReset();
+	printf("hander\n");
+	std::exit(signum);
+}
+
+
 /* To debug */
 #ifndef USE_APP_MAIN
 
+#define HostWriteMyMailboxTo(_val)  _vcast(h_to_device[0]) = (_val)
 /* Main */
 int main(int argc, char **argv)
 { 
-
+  std::signal(SIGINT, shutdown_handler);
   /* Global vars */
   dim3 blkdim = (1);
   dim3 blknum = (1);
@@ -103,7 +117,9 @@ int main(int argc, char **argv)
 
   std::this_thread::sleep_for(std::chrono::seconds(1));
   log("test\n");
-  int resultTaskIdx = scheduleMatMul();
+  int resultTaskIdx = scheduleMatMul(0);
+  int secondTaskIdx = 1;
+  int idx = 0;
   while(true) {
 	  log("sleeping\n");
 	  std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -111,10 +127,30 @@ int main(int argc, char **argv)
 	  lkMailboxFlushAsync(false);
 
 	  lkMailboxPrint("Sleeping watcher", 0);
-	  if(lkHFromDevice(0) == THREAD_FINISHED) {
-		  lkHToDevice(0) = THREAD_NOP;
-		  printf("Got msg Thread Finished");
-		  get_result_matmul(resultTaskIdx);
+
+
+		if(lkHFromDevice(0) == THREAD_FINISHED) {
+		  printf("Got msg finished and idx = %d\n", idx);
+		  if(idx == 0) {
+			  printf("Got msg Thread Finished");
+			  get_result_matmul(resultTaskIdx, idx);
+			  HostWriteMyMailboxTo(THREAD_NOP);
+			  
+			  lkMailboxFlushAsync(true);
+			  lkMailboxFlushAsync(false);
+
+			  lkMailboxPrint("Sleeping watcher", 0);
+			  secondTaskIdx = scheduleMatMul(1);
+			  std::this_thread::sleep_for(std::chrono::seconds(2));
+			  idx++;
+		  }
+		  else if(idx == 1) {
+			  printf("Got msg Thread Finished");
+			  get_result_matmul(secondTaskIdx, idx);
+			  HostWriteMyMailboxTo(THREAD_NOP);
+			  idx++;
+		  }
+
 	  }
 
   }

@@ -1,4 +1,5 @@
 #pragma once
+//#include <__clang_cuda_builtin_vars.h>
 #include <cstdint>
 #include <cuda_runtime.h>
 #include "utils.h"
@@ -16,11 +17,14 @@
  * NVIDIA CUDA C Programming Guide
  * (https://docs.nvidia.com/cuda/cuda-c-programming-guide/#programming-interface).
  */
-Matrix mA;
-Matrix mB;
+#define STRESS 2
+
+Matrix mA[STRESS];
+Matrix mB[STRESS];
+
 //Above for debugging
 
-MatMulArgs generateMatDataPointer() {
+MatMulArgs generateMatDataPointer(int stidx) {
 	Matrix a = createMatrix(16, 16);
 	Matrix b = createMatrix(16, 16);
 	fill_random(a);
@@ -28,13 +32,13 @@ MatMulArgs generateMatDataPointer() {
 	MatMulArgs data;
 	data.A = a;
 	data.B = b;
-	mA = a;
-	mB = b;
+	mA[stidx] = a;
+	mB[stidx] = b;
 	return data;
 }
 
-int scheduleMatMul() {
-	MatMulArgs data = generateMatDataPointer();
+int scheduleMatMul(int stidx) {
+	MatMulArgs data = generateMatDataPointer(stidx);
 	int length;
 	uint8_t* flattened = flatten(data, &length);
 	
@@ -93,7 +97,7 @@ __device__ Matrix from_raw(void* ptr, int* offset) {
 	int width = *(int*) ptr; ptr += 4;
 	int height = *(int*) ptr; ptr += 4;
 	int stride = *(int*) ptr; ptr += 4;
-	printf("%d, %d, %d\n", width, height, stride);
+	//printf("%d, %d, %d\n", width, height, stride);
 	const float* values = reinterpret_cast<const float*>(ptr);
 
 	*offset = *offset + 12 + sizeof(float) * width*height;
@@ -107,20 +111,31 @@ __device__ Matrix from_raw(void* ptr, int* offset) {
 
 
 __device__ int naive_wrapper(Task task) {
-	printf("Naive Wrapper: made it here\n");
+	//printf("Naive Wrapper: made it here\n");
 	Matrix a = from_raw(devInputBufferPointers[task.epoch], &task.input_offset);
 	Matrix b = from_raw(devInputBufferPointers[task.epoch],&task.input_offset);
 
-	printf("Width: %d; Height: %d; element_1: %f\n", a.width, a.height, a.elements[0]);
-	printf("Width: %d; Height: %d; element_1: %f\n", b.width, b.height, b.elements[0]);
+	//printf("Width: %d; Height: %d; element_1: %f\n", a.width, a.height, a.elements[0]);
+//	printf("Width: %d; Height: %d; element_1: %f\n", b.width, b.height, b.elements[0]);
 
 	((uint8_t*)devOutputBufferPointers[task.epoch] + task.output_offset)[0] = ((uint8_t*)devOutputBufferPointers[task.epoch] + task.output_offset)[4] = ((uint8_t*)devOutputBufferPointers[task.epoch] + task.output_offset)[8] = 16; 
 
-	Matrix c = from_raw(devOutputBufferPointers[task.epoch], &task.output_offset);
+	int output_offset = task.output_offset;
+	Matrix c = from_raw(devOutputBufferPointers[task.epoch], &output_offset);
 
 	int ret =  matmul_kernel(a, b, &c);
 
-	printf("Width: %d; Height: %d; element_1: %f\n", c.width, c.height, c.elements[0]);
+	//int tid = threadIdx.x + blockIdx.x;
+	//if(tid == 0){
+	
+		//printf("Width: %d; Height: %d; element_1: %f\n", c.width, c.height, c.elements[0]);
+
+	//	for(int i = 0; i < 5; i++) {
+	//		printf("%f\n", c.elements[i]);
+	//	}
+	//}
+
+	//printf("Width: %d; Height: %d; element_1: %f\n", c.width, c.height, c.elements[0]);
 	
 	return ret;
 
@@ -143,11 +158,13 @@ void cpu_matmul(const Matrix& mat1, const Matrix& mat2, Matrix& res_mat) {
 	}
 }
 
-void get_result_matmul(int taskIdx){
+void get_result_matmul(int taskIdx, int stidx){
 
 	printf("Comparing Results\n");
 	Task task;
 	cudaError_t err = cudaMemcpyAsync(&task, dtq + taskIdx, sizeof(Task), cudaMemcpyDeviceToHost, qStream);
+
+	printf("%d input_offset, %d output_offset, %d epoch", task.input_offset, task.output_offset, task.epoch);
 
 	printf("%s\n", cudaGetErrorName(err));
 
@@ -160,7 +177,11 @@ void get_result_matmul(int taskIdx){
 	printMatrix(mres);
 	
 	Matrix res_mat = createMatrix(16, 16);
-	cpu_matmul(mA, mB, res_mat);
+	cpu_matmul(mA[stidx], mB[stidx], res_mat);
+	printf("Result Matrix:\n");
+
+
+	printMatrix(res_mat);
 	std::cout << "Comparison: " << (compare(res_mat, mres) ? "CPU result = GPU Naive result" : "CPU result != GPU Naive Result") << "\n";
 	
 }
@@ -179,7 +200,7 @@ __device__ int matmul_kernel(const Matrix mat1, const Matrix mat2, Matrix* res_m
     float value = 0;
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
-	printf("My row is %d, my col is %d and my res placement is %d\n", row, col, row * 16 + col);
+	//printf("My row is %d, my col is %d and my res placement is %d\n", row, col, row * 16 + col);
     for (int i = 0; i < mat1.width; i++) {
         value += mat1.elements[row * mat1.width + i] * mat2.elements[i * mat2.width + col];
 	}
